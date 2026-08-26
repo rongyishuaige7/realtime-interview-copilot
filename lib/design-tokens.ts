@@ -1,6 +1,6 @@
 /** TypeScript mirror of CSS design tokens in app/globals.css */
 
-export const tokens = {
+const tokens = {
   surface: {
     base: "oklch(0.14 0.008 75)",
     raised: "oklch(0.18 0.008 75)",

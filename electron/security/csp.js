@@ -21,7 +21,7 @@ const { DEV_CSP, PROD_CSP } = require("../../lib/csp.mjs");
  *     `us-assets.i.posthog.com`) still works without further edits.
  *     This matches PostHog's own published CSP guidance. */
 function pickCsp(isPackaged) {
-  return isPackaged ? PROD_CSP : DEV_CSP;
+    return isPackaged ? PROD_CSP : DEV_CSP;
 }
 /** Install the CSP injector on a session. Strips any upstream
  *  Content-Security-Policy / CSP-Report-Only headers (case-insensitive)
@@ -35,34 +35,32 @@ function pickCsp(isPackaged) {
  *  warning. Stripping first guarantees Electron's CSP is the SOLE policy
  *  on the response. */
 function installCsp(s, csp) {
-  s.webRequest.onHeadersReceived((details, callback) => {
-    const sourceHeaders = details.responseHeaders ?? {};
-    const filteredHeaders = {};
-    for (const [name, value] of Object.entries(sourceHeaders)) {
-      if (/^content-security-policy(-report-only)?$/i.test(name)) continue;
-      filteredHeaders[name] = value;
-    }
-    filteredHeaders["Content-Security-Policy"] = [csp];
-    callback({ responseHeaders: filteredHeaders });
-  });
+    s.webRequest.onHeadersReceived((details, callback) => {
+        const sourceHeaders = details.responseHeaders ?? {};
+        const filteredHeaders = {};
+        for (const [name, value] of Object.entries(sourceHeaders)) {
+            if (/^content-security-policy(-report-only)?$/i.test(name))
+                continue;
+            filteredHeaders[name] = value;
+        }
+        filteredHeaders["Content-Security-Policy"] = [csp];
+        callback({ responseHeaders: filteredHeaders });
+    });
 }
 /** Inject Origin header for API requests to fix "Missing or null Origin"
  *  errors. This is required because Electron sends "file://" or "null"
  *  as origin for local files. */
 function installOriginHeaderInjection(s) {
-  s.webRequest.onBeforeSendHeaders(
-    {
-      urls: [
-        "https://realtime-worker-api.innovatorved.workers.dev/*",
-        "https://realtime-worker-api-prod.vedgupta.in/*",
-        "https://*.deepgram.com/*",
-        "https://api.deepgram.com/*",
-      ],
-    },
-    (details, callback) => {
-      // Mimic development origin which is likely whitelisted server-side.
-      details.requestHeaders["Origin"] = "http://localhost:3000";
-      callback({ requestHeaders: details.requestHeaders });
-    },
-  );
+    s.webRequest.onBeforeSendHeaders({
+        urls: [
+            "https://realtime-worker-api.innovatorved.workers.dev/*",
+            "https://realtime-worker-api-prod.vedgupta.in/*",
+            "https://*.deepgram.com/*",
+            "https://api.deepgram.com/*",
+        ],
+    }, (details, callback) => {
+        // Mimic development origin which is likely whitelisted server-side.
+        details.requestHeaders["Origin"] = "http://localhost:3000";
+        callback({ requestHeaders: details.requestHeaders });
+    });
 }

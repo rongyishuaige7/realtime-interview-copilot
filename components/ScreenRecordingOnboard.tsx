@@ -36,6 +36,7 @@ export function ScreenRecordingOnboard() {
   const [justGranted, setJustGranted] = useState(false);
   const [showRelaunchHint, setShowRelaunchHint] = useState(false);
   const enableClickedAtRef = useRef<number | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -87,10 +88,27 @@ export function ScreenRecordingOnboard() {
     };
 
     check();
-    const interval = setInterval(check, 1200);
+    // Progressive backoff: check frequently right after the user clicks
+    // Enable, but don't burn IPC calls forever if they walk away. Also
+    // pauses while the window is hidden.
+    const delays = [1200, 1200, 1200, 4000, 4000, 15000];
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = () => {
+      timer = setTimeout(async () => {
+        if (!document.hidden) {
+          await check();
+        }
+        attempt = Math.min(attempt + 1, delays.length - 1);
+        tick();
+      }, delays[attempt]);
+    };
+    tick();
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (timer !== null) clearTimeout(timer);
     };
   }, [isElectron, isMac]);
 
@@ -122,6 +140,54 @@ export function ScreenRecordingOnboard() {
       /* ignore */
     }
   }, []);
+
+  // Modal keyboard behavior: Esc dismisses, Tab cycles inside the dialog,
+  // and focus lands on the primary CTA when the modal opens.
+  useEffect(() => {
+    if (!isElectron || !isMac || status === null) return;
+    const isActive = status !== "granted" && !dismissedModal;
+    if (!isActive) return;
+
+    const getFocusable = () =>
+      dialogRef.current
+        ? Array.from(
+            dialogRef.current.querySelectorAll<HTMLElement>(
+              'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((el) => !el.hasAttribute("disabled"))
+        : [];
+
+    (getFocusable()[0] ?? dialogRef.current)?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dismiss();
+        return;
+      }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      const items = getFocusable();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (
+        e.shiftKey &&
+        (!activeEl ||
+          !dialogRef.current.contains(activeEl) ||
+          activeEl === first)
+      ) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && activeEl === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isElectron, isMac, status, dismissedModal, dismiss]);
 
   // Only relevant on macOS Electron builds.
   if (!isElectron || !isMac) return null;
@@ -164,7 +230,10 @@ export function ScreenRecordingOnboard() {
       >
         <div className="absolute inset-0 bg-[color:color-mix(in_oklch,var(--app-surface)_82%,transparent)] backdrop-blur-lg" />
 
-        <div className="relative w-full max-w-lg rounded-2xl overflow-hidden border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface-elev)_94%,transparent)] backdrop-blur-lg shadow-2xl">
+        <div
+          ref={dialogRef}
+          className="relative w-full max-w-lg rounded-2xl overflow-hidden border border-[color:var(--app-border)] bg-[color:color-mix(in_oklch,var(--app-surface-elev)_94%,transparent)] backdrop-blur-lg shadow-2xl"
+        >
           <button
             type="button"
             onClick={dismiss}

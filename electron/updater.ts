@@ -117,6 +117,15 @@ export function initAutoUpdater(
   setTimeout(() => {
     void checkForUpdates();
   }, 30_000);
+
+  // Re-check periodically so long-running sessions (the app is meant to
+  // stay open all day) still pick up new releases. Skipped while an
+  // update is already downloaded — restarting is the user's call.
+  const RECHECK_INTERVAL_MS = 8 * 60 * 60 * 1000;
+  setInterval(() => {
+    if (status.type === "downloaded") return;
+    void checkForUpdates();
+  }, RECHECK_INTERVAL_MS);
 }
 
 export async function checkForUpdates(): Promise<void> {

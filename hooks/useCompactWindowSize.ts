@@ -8,18 +8,18 @@
 
 import { useEffect } from "react";
 
-export const COMPACT_WINDOW_WIDTH = 980;
-export const FULL_WINDOW = { width: 1180, height: 640 } as const;
+const COMPACT_WINDOW_WIDTH = 980;
+const FULL_WINDOW = { width: 1180, height: 640 } as const;
 
 /** Toolbar-only idle height. */
 export const COMPACT_HEIGHT_IDLE = 64;
-export const COMPACT_HEIGHT_TRANSCRIPT = 140;
-export const COMPACT_HEIGHT_COMPOSER = 120;
-export const COMPACT_HEIGHT_COMPOSER_IMAGES = 168;
-export const COMPACT_HEIGHT_OUTPUT = 300;
+const COMPACT_HEIGHT_TRANSCRIPT = 140;
+const COMPACT_HEIGHT_COMPOSER = 120;
+const COMPACT_HEIGHT_COMPOSER_IMAGES = 168;
+const COMPACT_HEIGHT_OUTPUT = 300;
 /** Unified compact height whenever output (Copilot, Summarize, or Ask AI) is visible. */
-export const COMPACT_HEIGHT_OUTPUT_COMPOSER = 420;
-export const COMPACT_HEIGHT_CONTEXT_EXTRA = 80;
+const COMPACT_HEIGHT_OUTPUT_COMPOSER = 420;
+const COMPACT_HEIGHT_CONTEXT_EXTRA = 80;
 
 export type CompactLayoutState = {
   showContext: boolean;

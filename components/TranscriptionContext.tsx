@@ -33,6 +33,11 @@ import {
   startDeepgramSession,
 } from "@/lib/transcription/deepgramSession";
 import { mergeSegments } from "@/lib/transcription/segmentMerger";
+import {
+  clearPersistedSegments,
+  loadPersistedSegments,
+  persistSegments,
+} from "@/lib/transcription/transcript-persistence";
 import { endLiveSession, trackEvent } from "@/lib/session-tracking";
 import type { TranscriptionSegment } from "@/lib/types";
 
@@ -50,6 +55,11 @@ interface TranscriptionContextValue {
   stopSession: () => void;
   clearTranscription: () => void;
   dismissError: () => void;
+  /** Read-at-submit access to the transcript without subscribing to
+   *  per-interim updates (submit callbacks stay referentially stable). */
+  getTranscribedText: () => string;
+  /** True when the last transcript was restored from local storage. */
+  hasRestoredTranscript: boolean;
 }
 
 const TranscriptionContext = createContext<TranscriptionContextValue | null>(
@@ -66,6 +76,13 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
   const [transcriptionSegments, setTranscriptionSegments] = useState<
     TranscriptionSegment[]
   >([]);
+  const [hasRestoredTranscript, setHasRestoredTranscript] = useState(false);
+
+  // Mirror of `transcribedText` for read-at-submit consumers — keeps
+  // their callbacks stable without subscribing them to token updates.
+  const transcribedTextRef = useRef("");
+  transcribedTextRef.current = transcribedText;
+  const getTranscribedText = useCallback(() => transcribedTextRef.current, []);
 
   const sessionHandleRef = useRef<DeepgramSessionHandle | null>(null);
   const segmentCounterRef = useRef<number>(0);
@@ -121,10 +138,35 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
     sessionHandleRef.current = handle;
   }, [isElectron, stopHandle]);
 
+  // Throttled persistence of finalized segments. Interim updates mutate
+  // constantly; a fixed 1s tick writes at most once per second regardless
+  // of speech rate, and stop/clear flush immediately.
+  const transcriptionSegmentsRef = useRef(transcriptionSegments);
+  transcriptionSegmentsRef.current = transcriptionSegments;
+  const persistDirtyRef = useRef(false);
+
+  const flushTranscriptPersist = useCallback(() => {
+    if (!persistDirtyRef.current) return;
+    persistDirtyRef.current = false;
+    persistSegments(transcriptionSegmentsRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (transcriptionSegments.length > 0) {
+      persistDirtyRef.current = true;
+    }
+  }, [transcriptionSegments]);
+
+  useEffect(() => {
+    const id = setInterval(flushTranscriptPersist, 1000);
+    return () => clearInterval(id);
+  }, [flushTranscriptPersist]);
+
   const stopSession = useCallback(() => {
     sessionIdRef.current++;
     const sid = sessionHandleRef.current?.getLiveSessionId() ?? null;
     stopHandle();
+    flushTranscriptPersist();
     setSessionState("idle");
     posthog.capture("recording_stopped", {
       platform: isElectron ? "electron" : "browser",
@@ -134,14 +176,33 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
       metadata: { platform: isElectron ? "electron" : "browser" },
     });
     if (sid) void endLiveSession(sid, "user_stopped");
-  }, [stopHandle, isElectron]);
+  }, [stopHandle, isElectron, flushTranscriptPersist]);
 
   const clearTranscription = useCallback(() => {
+    persistDirtyRef.current = false;
     setTranscribedText("");
     setTranscriptionSegments([]);
+    setHasRestoredTranscript(false);
+    clearPersistedSegments();
   }, []);
 
   const dismissError = useCallback(() => setErrorMessage(null), []);
+
+  // Restore the persisted transcript tail once on mount so a relaunch
+  // keeps recent context. Restored segments feed both the display and the
+  // Copilot prompt text.
+  useEffect(() => {
+    const saved = loadPersistedSegments();
+    if (saved.length === 0) return;
+    setTranscriptionSegments(saved);
+    setTranscribedText(
+      saved
+        .map((s) => s.text.trim())
+        .filter(Boolean)
+        .join(" "),
+    );
+    setHasRestoredTranscript(true);
+  }, []);
 
   // Tear down for real when the provider itself unmounts (i.e. app close /
   // hard navigation). Toggling compact ↔ full no longer remounts the
@@ -181,6 +242,8 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
       stopSession,
       clearTranscription,
       dismissError,
+      getTranscribedText,
+      hasRestoredTranscript,
     }),
     [
       transcribedText,
@@ -196,6 +259,8 @@ export function TranscriptionProvider({ children }: { children: ReactNode }) {
       stopSession,
       clearTranscription,
       dismissError,
+      getTranscribedText,
+      hasRestoredTranscript,
     ],
   );
 

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import type { SavedNote, PaginationInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import SafeMarkdown from "@/components/SafeMarkdown";
@@ -50,6 +51,9 @@ export default function History({
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
   const [activeTag, setActiveTag] = useState<string>("");
+  const [notePendingDelete, setNotePendingDelete] = useState<string | null>(
+    null,
+  );
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchChange = useCallback(
@@ -240,7 +244,7 @@ export default function History({
                 className={cn(
                   "rounded-lg font-medium transition-all border",
                   isSidebar
-                    ? "px-2 py-1 text-[9px]"
+                    ? "px-2 py-1 text-[10px]"
                     : "px-2.5 py-1.5 text-[10px]",
                   activeTag === tag
                     ? (tagColors[tag] ??
@@ -314,12 +318,21 @@ export default function History({
               <div
                 key={note.id}
                 className={cn(
-                  "group cursor-pointer border-b border-border-subtle transition-colors hover:bg-surface-overlay",
+                  "group cursor-pointer border-b border-border-subtle transition-colors hover:bg-surface-overlay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isSidebar ? "px-1 py-2.5" : "px-2 py-3",
                   isSelected && "bg-accent-muted/50",
                 )}
                 style={{ animationDelay: `${idx * 40}ms` }}
                 onClick={() => setExpandedNote(isExpanded ? null : note.id)}
+                role="button"
+                tabIndex={0}
+                aria-expanded={isExpanded}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setExpandedNote(isExpanded ? null : note.id);
+                  }
+                }}
               >
                 <div
                   className={cn(
@@ -332,7 +345,7 @@ export default function History({
                       className={cn(
                         "inline-flex items-center rounded-md font-medium border shrink-0",
                         isSidebar
-                          ? "px-1.5 py-0.5 text-[9px]"
+                          ? "px-1.5 py-0.5 text-[10px]"
                           : "px-2 py-0.5 text-[10px]",
                         tagColors[note.tag] ??
                           "bg-neutral-500/10 text-neutral-400 border-neutral-500/20",
@@ -343,7 +356,7 @@ export default function History({
                     <span
                       className={cn(
                         "text-text-tertiary",
-                        isSidebar ? "text-[9px]" : "text-[10px]",
+                        isSidebar ? "text-[10px]" : "text-[10px]",
                       )}
                     >
                       {formatDate(note.createdAt)}
@@ -358,11 +371,14 @@ export default function History({
                     )}
                   >
                     <button
-                      className="p-1.5 rounded-lg hover:bg-white/[0.06] text-neutral-500 hover:text-neutral-300 transition-colors"
+                      role="checkbox"
+                      aria-checked={isSelected}
+                      className="p-1.5 rounded-lg hover:bg-white/[0.06] text-neutral-500 hover:text-neutral-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleSelect(note.id);
                       }}
+                      onKeyDown={(e) => e.stopPropagation()}
                       title="Select for export"
                     >
                       <div
@@ -374,11 +390,12 @@ export default function History({
                       />
                     </button>
                     <button
-                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-neutral-500 hover:text-red-400 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-neutral-500 hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDelete(note.id);
+                        setNotePendingDelete(note.id);
                       }}
+                      onKeyDown={(e) => e.stopPropagation()}
                       title="Delete note"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -418,6 +435,11 @@ export default function History({
                   <button
                     type="button"
                     className="mt-1.5 text-[10px] font-medium text-accent-text transition-colors hover:text-accent"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedNote(isExpanded ? null : note.id);
+                    }}
+                    onKeyDown={(e) => e.stopPropagation()}
                   >
                     {isExpanded ? "Show less" : "Show more"}
                   </button>
@@ -485,6 +507,41 @@ export default function History({
           </Button>
         </div>
       )}
+
+      <Modal
+        isOpen={notePendingDelete !== null}
+        onClose={() => setNotePendingDelete(null)}
+        title="Delete this note?"
+      >
+        <p>This note will be permanently deleted. This can&apos;t be undone.</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setNotePendingDelete(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              if (notePendingDelete) onDelete(notePendingDelete);
+              setSelectedNotes((prev) => {
+                if (!notePendingDelete || !prev.has(notePendingDelete)) {
+                  return prev;
+                }
+                const next = new Set(prev);
+                next.delete(notePendingDelete);
+                return next;
+              });
+              setNotePendingDelete(null);
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

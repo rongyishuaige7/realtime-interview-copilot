@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { BookmarkPlus } from "lucide-react";
 import SafeMarkdown from "@/components/SafeMarkdown";
 import {
@@ -15,7 +16,10 @@ interface OutputCardProps {
   onSave: () => void;
 }
 
-export function OutputCard({ completion, onSave }: OutputCardProps) {
+export const OutputCard = memo(function OutputCard({
+  completion,
+  onSave,
+}: OutputCardProps) {
   return (
     <div
       className={`flex h-full min-h-0 flex-1 flex-col overflow-hidden ${overlayPanel}`}
@@ -63,4 +67,4 @@ export function OutputCard({ completion, onSave }: OutputCardProps) {
       </div>
     </div>
   );
-}
+});

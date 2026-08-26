@@ -1,14 +1,11 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
-  compactBubbleSurface,
-  compactTextShadow,
-  compactUserBubbleSurface,
   overlayBubbleAssistant,
-  overlayBubbleUser,
   overlayTextShadow,
+  overlayBubbleUser,
 } from "@/components/compact/compactTextStyles";
 import SafeMarkdown from "@/components/SafeMarkdown";
 import type { ChatMessage } from "@/hooks/useAskChat";
@@ -22,14 +19,17 @@ interface ChatThreadProps {
   className?: string;
 }
 
-export function ChatThread({
+export const ChatThread = memo(function ChatThread({
   messages,
   userLabel,
   onImageClick,
   density = "default",
   className,
 }: ChatThreadProps) {
-  const newestFirst = [...messages].reverse();
+  // Newest-first display; memoized so streaming updates to the tail
+  // message don't re-allocate the array (and re-render every bubble)
+  // per throttled flush.
+  const newestFirst = useMemo(() => [...messages].reverse(), [messages]);
 
   return (
     <div
@@ -50,9 +50,9 @@ export function ChatThread({
       ))}
     </div>
   );
-}
+});
 
-function ChatBubble({
+const ChatBubble = memo(function ChatBubble({
   message,
   userLabel,
   onImageClick,
@@ -128,8 +128,8 @@ function ChatBubble({
               : "px-3.5 py-2.5 text-sm",
             density === "compact"
               ? cn(
-                  compactTextShadow,
-                  isUser ? compactUserBubbleSurface : compactBubbleSurface,
+                  overlayTextShadow,
+                  isUser ? overlayBubbleUser : overlayBubbleAssistant,
                 )
               : cn(
                   overlayTextShadow,
@@ -165,7 +165,7 @@ function ChatBubble({
       )}
     </div>
   );
-}
+});
 
 function TypingIndicator() {
   return (

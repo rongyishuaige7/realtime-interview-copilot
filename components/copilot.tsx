@@ -10,6 +10,7 @@ import { AlertBanner } from "@/components/shell/AlertBanner";
 import { useTranscription } from "@/components/TranscriptionContext";
 import { useClientReady } from "@/hooks/useClientReady";
 import { useCopilotSubmit } from "@/hooks/useCopilotSubmit";
+import { useStickToBottom } from "@/hooks/useStickToBottom";
 import { useInterviewContext } from "@/components/InterviewContextProvider";
 import { useCopilotSession } from "@/components/CopilotSessionProvider";
 import { useTab } from "@/components/TabContext";
@@ -41,10 +42,19 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
     error: contextError,
   } = useInterviewContext();
 
-  const { transcribedText, transcriptionSegments, clearTranscription } =
-    useTranscription();
+  const {
+    transcriptionSegments,
+    clearTranscription,
+    getTranscribedText,
+    hasRestoredTranscript,
+  } = useTranscription();
   const { flag, setFlag } = useCopilotSession();
-  const transcriptionBoxRef = useRef<HTMLDivElement>(null);
+  const {
+    ref: transcriptionBoxRef,
+    showLatest,
+    handleScroll: handleTranscriptScroll,
+    scrollToLatest,
+  } = useStickToBottom(transcriptionSegments);
 
   const effectiveBg = useMemo(
     () =>
@@ -67,15 +77,8 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
   } = useCopilotSubmit({
     flag,
     bg: effectiveBg,
-    transcribedText,
+    getTranscribedText,
   });
-
-  useEffect(() => {
-    if (transcriptionBoxRef.current) {
-      transcriptionBoxRef.current.scrollTop =
-        transcriptionBoxRef.current.scrollHeight;
-    }
-  }, [transcriptionSegments]);
 
   const handleFlag = useCallback(
     (checked: boolean) => {
@@ -224,6 +227,10 @@ export function Copilot({ addInSavedData, isActive = false }: CopilotProps) {
             transcriptionBoxRef={transcriptionBoxRef}
             segments={transcriptionSegments}
             onClear={clearTranscription}
+            onScroll={handleTranscriptScroll}
+            showLatest={showLatest}
+            onJumpToLatest={scrollToLatest}
+            hasRestoredTranscript={hasRestoredTranscript}
           />
         </div>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

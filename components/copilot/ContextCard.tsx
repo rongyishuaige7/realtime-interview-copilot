@@ -4,7 +4,7 @@
 
 import dynamic from "next/dynamic";
 import { ChevronDown, FileText, Loader2, Upload, X, Zap } from "lucide-react";
-import type { ChangeEvent, RefObject } from "react";
+import { memo, type ChangeEvent, type RefObject } from "react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -42,7 +42,7 @@ interface ContextCardProps {
   onStop: (e?: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
-export function ContextCard({
+export const ContextCard = memo(function ContextCard({
   interviewNotes,
   onInterviewNotesChange,
   resumeText,
@@ -247,4 +247,4 @@ export function ContextCard({
       </form>
     </div>
   );
-}
+});

@@ -8,6 +8,7 @@ import posthog from "posthog-js";
 import { useCallback, useRef } from "react";
 import { humanizeHttpStatus } from "@/lib/api-errors";
 import { dbg } from "@/lib/debug";
+import { createStreamFlusher } from "@/lib/stream-flush";
 import {
   humanizeStreamError,
   isAbortError,
@@ -126,30 +127,39 @@ export function useCompactGenerate({
       );
 
       try {
-        await streamCompletion({
-          flag,
-          bg,
-          prompt,
-          image: imagePayload,
-          signal: controllerRef.current.signal,
-          resolveErrorMessage: (response, defaultMessage) => {
-            if (
-              isTypedAsk &&
-              defaultMessage === humanizeHttpStatus(0, { kind: "no-input" })
-            ) {
-              return humanizeHttpStatus(response.status, { kind: "ask-ai" });
-            }
-            return defaultMessage;
-          },
-          onChunk: (text) => {
-            sseEvents++;
-            if (firstTokenMs === null) {
-              firstTokenMs = Math.round(performance.now() - t0);
-              dbg("ask-completion", "first token at", firstTokenMs, "ms");
-            }
-            setCompletion((current) => current + text);
-          },
-        });
+        // Accumulate tokens locally; apply to state at a bounded rate.
+        let acc = "";
+        const flusher = createStreamFlusher(() => setCompletion(acc));
+        try {
+          await streamCompletion({
+            flag,
+            bg,
+            prompt,
+            image: imagePayload,
+            signal: controllerRef.current.signal,
+            resolveErrorMessage: (response, defaultMessage) => {
+              if (
+                isTypedAsk &&
+                defaultMessage === humanizeHttpStatus(0, { kind: "no-input" })
+              ) {
+                return humanizeHttpStatus(response.status, { kind: "ask-ai" });
+              }
+              return defaultMessage;
+            },
+            onChunk: (text) => {
+              sseEvents++;
+              if (firstTokenMs === null) {
+                firstTokenMs = Math.round(performance.now() - t0);
+                dbg("ask-completion", "first token at", firstTokenMs, "ms");
+              }
+              acc += text;
+              flusher.schedule();
+            },
+          });
+          flusher.flush();
+        } finally {
+          flusher.dispose();
+        }
         dbg(
           "ask-completion",
           "stream done · events:",

@@ -1,6 +1,7 @@
 "use client";
 
 import { authClient } from "@/lib/auth-client";
+import { onSessionExpired } from "@/lib/auth-events";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthWizard } from "./auth-wizard";
@@ -71,6 +72,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener("auth:logout", handleLogout);
     };
+  }, []);
+
+  // Mid-session expiry: the network layer (ricFetch) dispatches this when
+  // an API call returns 401. Flip back to the sign-in wizard instead of
+  // leaving the user stuck with inline errors.
+  useEffect(() => {
+    return onSessionExpired(() => setAuthenticated(false));
   }, []);
 
   if (!mounted || isPending) {

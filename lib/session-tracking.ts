@@ -94,7 +94,7 @@ export async function endLiveSession(
  * Returns the number of rows ended (or null on transport failure).
  * Idempotent server-side: zero rows is a normal "all clean" response.
  */
-export async function endAllLiveSessions(
+async function endAllLiveSessions(
   reason: string = "client_cleanup",
 ): Promise<number | null> {
   try {

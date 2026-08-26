@@ -4,6 +4,7 @@
  * from cross-site form posts.
  */
 import { BACKEND_API_URL } from "@/lib/constant";
+import { notifySessionExpired } from "@/lib/auth-events";
 
 export const RIC_CLIENT_HEADER = "RIC-Desktop";
 
@@ -29,5 +30,12 @@ export function ricFetch(
     ...init,
     credentials: "include",
     headers,
+  }).then((res) => {
+    // A 401 outside the auth endpoints means the session expired
+    // mid-use — tell the AuthGuard so the user lands on sign-in.
+    if (res.status === 401 && !path.startsWith("/api/auth")) {
+      notifySessionExpired();
+    }
+    return res;
   });
 }

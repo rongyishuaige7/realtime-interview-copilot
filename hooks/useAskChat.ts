@@ -10,6 +10,7 @@ import {
 import { ricFetch } from "@/lib/ric-fetch";
 import { dbg } from "@/lib/debug";
 import { parseSseStream } from "@/lib/sse";
+import { createStreamFlusher } from "@/lib/stream-flush";
 import { FLAGS } from "@/lib/types";
 
 /**
@@ -91,6 +92,16 @@ export interface UseAskChatHandle {
 
 const DEFAULT_SEND_CAP = 16;
 
+/** Hard cap on the in-memory + persisted thread. Only the wire payload is
+ *  capped by `sendCap`; without this, a long session grows unbounded and
+ *  every streamed token re-serializes an ever-larger array. */
+const MAX_THREAD_MESSAGES = 40;
+
+/** Debounce window for sessionStorage writes (streamed tokens mutate
+ *  `messages` many times per second — persisting per mutation would
+ *  JSON-stringify the whole thread, images included, at token rate). */
+const PERSIST_DEBOUNCE_MS = 1000;
+
 function generateId(): string {
   if (
     typeof crypto !== "undefined" &&
@@ -130,7 +141,8 @@ function loadFromSession(key: string | undefined): ChatMessage[] {
           : undefined,
         ts: typeof m.ts === "number" ? m.ts : Date.now(),
         // pending is intentionally stripped on hydrate.
-      }));
+      }))
+      .slice(-MAX_THREAD_MESSAGES);
   } catch {
     return [];
   }
@@ -144,10 +156,17 @@ function loadFromSession(key: string | undefined): ChatMessage[] {
  * "an assistant reply to nothing").
  */
 function trimForServer(history: ChatMessage[], cap: number): ChatMessage[] {
-  if (history.length <= cap) return history.slice();
+  if (history.length <= cap) return history;
   const dropped = history.slice(history.length - cap);
   if (dropped[0]?.role === "assistant") return dropped.slice(1);
   return dropped;
+}
+
+/** Cap the kept thread, dropping oldest turns first (same pair-wise
+ *  alignment as `trimForServer` so the thread never opens on an
+ *  assistant bubble). */
+function capThread(history: ChatMessage[]): ChatMessage[] {
+  return trimForServer(history, MAX_THREAD_MESSAGES);
 }
 
 export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
@@ -172,19 +191,55 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
   const optsRef = useRef({ background, sendCap, storageKey });
   optsRef.current = { background, sendCap, storageKey };
 
-  // Persist on every mutation. Strip `pending` so a reload after an
+  // Persist with a debounce — streamed tokens mutate `messages` many
+  // times per second and each write serializes the whole thread
+  // (screenshot data URLs included). A trailing 1s write coalesces the
+  // burst at negligible risk (a crash within the window loses only the
+  // last second of chat). Strip `pending` so a reload after an
   // interrupted stream doesn't leave a forever-spinning bubble.
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const writePersist = useCallback((key: string | undefined) => {
+    if (!key || typeof window === "undefined") return;
+    const persistable = messagesRef.current.map(
+      ({ pending: _pending, ...rest }) => rest,
+    );
+    try {
+      sessionStorage.setItem(key, JSON.stringify(persistable));
+    } catch {
+      // Quota exceeded (large screenshot threads) — retry once without
+      // image data URLs so text history still survives. If even that
+      // fails, in-memory state remains authoritative.
+      try {
+        const textOnly = messagesRef.current.map(
+          ({ pending: _pending, images: _images, ...rest }) => rest,
+        );
+        sessionStorage.setItem(key, JSON.stringify(textOnly));
+      } catch {
+        /* give up silently */
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!storageKey || typeof window === "undefined") return;
-    try {
-      const persistable = messages.map(
-        ({ pending: _pending, ...rest }) => rest,
-      );
-      sessionStorage.setItem(storageKey, JSON.stringify(persistable));
-    } catch {
-      // Quota exceeded etc — in-memory state remains authoritative.
-    }
-  }, [messages, storageKey]);
+    if (persistTimerRef.current !== null) return;
+    persistTimerRef.current = setTimeout(() => {
+      persistTimerRef.current = null;
+      writePersist(storageKey);
+    }, PERSIST_DEBOUNCE_MS);
+  }, [messages, storageKey, writePersist]);
+
+  // Final flush on unmount so a reload right after a message isn't lost.
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current !== null) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+      writePersist(optsRef.current.storageKey);
+    };
+  }, [writePersist]);
 
   // Abort on unmount so an SSE stream doesn't outlive the surface.
   useEffect(
@@ -265,7 +320,7 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
 
       // Optimistic UI: append BOTH the user msg and an empty pending
       // assistant placeholder so the user sees instant feedback.
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
+      setMessages((prev) => capThread([...prev, userMsg, assistantMsg]));
       setError(null);
       setCanRegenerate(false);
       setIsLoading(true);
@@ -344,34 +399,44 @@ export function useAskChat(options: UseAskChatOptions = {}): UseAskChatHandle {
         //     don't abort the stream
         let full = "";
         let streamError: string | null = null;
-        await parseSseStream(res, {
-          signal: controller.signal,
-          onChunk: (delta) => {
-            if (typeof delta.text === "string") {
-              sseEvents++;
-              if (firstTokenMs === null) {
-                firstTokenMs = Math.round(performance.now() - t0);
-                dbg("ask-chat", "first token at", firstTokenMs, "ms");
-              }
-              full += delta.text;
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantMsg.id ? { ...msg, text: full } : msg,
-                ),
-              );
-            }
-          },
-          onError: (message) => {
-            streamError = message;
-          },
-          onParseError: (parseErr) => {
-            dbg(
-              "ask-chat",
-              "SSE parse error:",
-              parseErr instanceof Error ? parseErr.message : String(parseErr),
-            );
-          },
+        // Apply streamed text to React state at a bounded rate — one
+        // render per token is wasted work for long answers.
+        const flusher = createStreamFlusher(() => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsg.id ? { ...msg, text: full } : msg,
+            ),
+          );
         });
+        try {
+          await parseSseStream(res, {
+            signal: controller.signal,
+            onChunk: (delta) => {
+              if (typeof delta.text === "string") {
+                sseEvents++;
+                if (firstTokenMs === null) {
+                  firstTokenMs = Math.round(performance.now() - t0);
+                  dbg("ask-chat", "first token at", firstTokenMs, "ms");
+                }
+                full += delta.text;
+                flusher.schedule();
+              }
+            },
+            onError: (message) => {
+              streamError = message;
+            },
+            onParseError: (parseErr) => {
+              dbg(
+                "ask-chat",
+                "SSE parse error:",
+                parseErr instanceof Error ? parseErr.message : String(parseErr),
+              );
+            },
+          });
+          flusher.flush();
+        } finally {
+          flusher.dispose();
+        }
         if (streamError) {
           throw new Error(streamError);
         }

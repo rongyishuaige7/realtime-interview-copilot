@@ -16,7 +16,7 @@ import {
   type ReactNode,
 } from "react";
 import { authClient } from "@/lib/auth-client";
-import { BACKEND_API_URL } from "@/lib/constant";
+import { humanizeError } from "@/lib/api-errors";
 import {
   APP_SESSION_KEYS,
   readAppSession,
@@ -133,8 +133,7 @@ export function InterviewContextProvider({
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/interview-context`, {
-        credentials: "include",
+      const res = await ricFetch("/api/interview-context", {
         signal: abortRef.current.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -149,8 +148,7 @@ export function InterviewContextProvider({
       });
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      setError(humanizeError(err));
     } finally {
       setIsLoading(false);
     }
@@ -243,8 +241,7 @@ export function InterviewContextProvider({
         setIsHydrated(true);
         return true;
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
+        setError(humanizeError(err));
         return false;
       } finally {
         setIsSaving(false);

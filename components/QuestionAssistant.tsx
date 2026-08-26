@@ -63,7 +63,8 @@ export function QuestionAssistant({
 
   // Shared Ask AI thread — same conversation in full mode and compact drawer.
   const chat = useSharedAskChat();
-  const { messages, isLoading, send, abort, reset } = chat;
+  const { messages, isLoading, send, abort, reset, regenerate, canRegenerate } =
+    chat;
   const { resumeText, jobDescription, interviewNotes } = useInterviewContext();
   const contextAttached = hasAttachedContext({ resumeText, jobDescription });
   const hasNotes = !!interviewNotes.trim();
@@ -393,27 +394,27 @@ export function QuestionAssistant({
 
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             {resumeText?.trim() && (
-              <span className="text-[9px] text-sky-300/90 bg-sky-500/[0.08] px-2 py-0.5 rounded-full border border-sky-500/15">
+              <span className="text-[10px] text-sky-300/90 bg-sky-500/[0.08] px-2 py-0.5 rounded-full border border-sky-500/15">
                 Resume attached
               </span>
             )}
             {jobDescription.trim() && (
-              <span className="text-[9px] text-violet-300/90 bg-violet-500/[0.08] px-2 py-0.5 rounded-full border border-violet-500/15">
+              <span className="text-[10px] text-violet-300/90 bg-violet-500/[0.08] px-2 py-0.5 rounded-full border border-violet-500/15">
                 JD attached
               </span>
             )}
             {hasNotes && !contextAttached && (
-              <span className="text-[9px] text-emerald-500/60 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10">
+              <span className="text-[10px] text-emerald-500/60 bg-emerald-500/[0.06] px-2 py-0.5 rounded-full border border-emerald-500/10">
                 Notes included
               </span>
             )}
             {!contextAttached && !hasNotes && (
-              <span className="text-[9px] text-neutral-500">
+              <span className="text-[10px] text-text-tertiary">
                 No saved context — add resume or JD in Copilot tab
               </span>
             )}
             {messages.length > 0 && (contextAttached || hasNotes) && (
-              <span className="text-[9px] text-neutral-600">
+              <span className="text-[10px] text-text-tertiary">
                 · New chat picks up latest context
               </span>
             )}
@@ -634,7 +635,16 @@ export function QuestionAssistant({
               <div
                 className={`mb-2 p-2 text-xs text-destructive animate-fade-in-scale ${overlayErrorBlock}`}
               >
-                {error}
+                <span>{error}</span>
+                {canRegenerate && !isLoading && (
+                  <button
+                    type="button"
+                    onClick={() => void regenerate()}
+                    className="ml-2 underline underline-offset-2 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--app-ring)] rounded-sm"
+                  >
+                    Retry
+                  </button>
+                )}
               </div>
             )}
 

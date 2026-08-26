@@ -12,13 +12,16 @@ import {
   isAbortError,
   streamCompletion,
 } from "@/lib/stream-completion";
+import { createStreamFlusher } from "@/lib/stream-flush";
 import { FLAGS } from "@/lib/types";
 import { useCopilotSession } from "@/components/CopilotSessionProvider";
 
 interface UseCopilotSubmitArgs {
   flag: FLAGS;
   bg: string;
-  transcribedText: string;
+  /** Read-at-submit transcript accessor — keeps `submit` referentially
+   *  stable across interim transcription updates. */
+  getTranscribedText: () => string;
 }
 
 export interface CopilotSubmitHandle {
@@ -36,7 +39,7 @@ export interface CopilotSubmitHandle {
 export function useCopilotSubmit({
   flag,
   bg,
-  transcribedText,
+  getTranscribedText,
 }: UseCopilotSubmitArgs): CopilotSubmitHandle {
   const { completion, setCompletion } = useCopilotSession();
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -92,15 +95,25 @@ export function useCopilotSubmit({
       });
 
       try {
-        await streamCompletion({
-          flag: runFlag,
-          bg: runBg,
-          prompt,
-          signal: controller.current.signal,
-          onChunk: (text) => {
-            setCompletion((current) => current + text);
-          },
-        });
+        // Accumulate tokens locally and apply to React state at a bounded
+        // rate — one render per token is wasteful for long answers.
+        let acc = "";
+        const flusher = createStreamFlusher(() => setCompletion(acc));
+        try {
+          await streamCompletion({
+            flag: runFlag,
+            bg: runBg,
+            prompt,
+            signal: controller.current.signal,
+            onChunk: (text) => {
+              acc += text;
+              flusher.schedule();
+            },
+          });
+          flusher.flush();
+        } finally {
+          flusher.dispose();
+        }
         lastFailedRef.current = null;
         setCanRegenerate(false);
       } catch (err: unknown) {
@@ -127,9 +140,9 @@ export function useCopilotSubmit({
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       e.stopPropagation();
-      await runCompletion(flag, bg, transcribedText);
+      await runCompletion(flag, bg, getTranscribedText());
     },
-    [bg, flag, runCompletion, transcribedText],
+    [bg, flag, runCompletion, getTranscribedText],
   );
 
   const regenerate = useCallback(async () => {

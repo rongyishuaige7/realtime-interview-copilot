@@ -16,10 +16,9 @@ import SafeMarkdown from "@/components/SafeMarkdown";
 import { ChatThread } from "@/components/ui/ChatThread";
 import type { ChatMessage } from "@/hooks/useAskChat";
 import {
-  compactTextShadow,
+  overlayTextShadow,
   compactTextSurface,
   overlayErrorBlock,
-  overlayTextShadow,
 } from "@/components/compact/compactTextStyles";
 import { FLAGS } from "@/lib/types";
 
@@ -91,7 +90,7 @@ export function OutputPanel({
             />
           ) : chatIsStreaming ? (
             <div
-              className={`inline-flex items-center gap-2 text-xs text-text-primary ${compactTextSurface} ${compactTextShadow}`}
+              className={`inline-flex items-center gap-2 text-xs text-text-primary ${compactTextSurface} ${overlayTextShadow}`}
             >
               <span className="relative flex h-2 w-2" aria-hidden>
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
@@ -131,7 +130,7 @@ export function OutputPanel({
       ) : (
         <div
           data-clickable
-          className={`inline-flex items-center gap-2 text-xs text-text-primary ${compactTextSurface} ${compactTextShadow}`}
+          className={`inline-flex items-center gap-2 text-xs text-text-primary ${compactTextSurface} ${overlayTextShadow}`}
         >
           <span className="relative flex h-2 w-2" aria-hidden>
             <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />

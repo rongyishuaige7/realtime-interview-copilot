@@ -84,8 +84,8 @@ export function isDeepgramResultsMessage(
 
 /** Exponential backoff delay for live-session reconnect attempts. */
 export const DEEPGRAM_RECONNECT_MAX_ATTEMPTS = 5;
-export const DEEPGRAM_RECONNECT_BASE_MS = 1000;
-export const DEEPGRAM_RECONNECT_MAX_MS = 30_000;
+const DEEPGRAM_RECONNECT_BASE_MS = 1000;
+const DEEPGRAM_RECONNECT_MAX_MS = 30_000;
 
 export function deepgramReconnectDelayMs(attempt: number): number {
   const capped = Math.min(

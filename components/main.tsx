@@ -48,8 +48,10 @@ export default function MainPage() {
 
   const { isExporting, error: exportError, exportNotes } = useExport();
   const [saveNoteError, setSaveNoteError] = useState<string | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState(false);
-  const topError = saveNoteError ?? notesError ?? exportError ?? null;
+  const topError =
+    saveNoteError ?? captureError ?? notesError ?? exportError ?? null;
   useEffect(() => {
     if (topError) setDismissedError(false);
   }, [topError]);
@@ -60,7 +62,11 @@ export default function MainPage() {
     }
   }, []);
 
-  useCaptureAndAsk({ compactMode, setActiveTab });
+  useCaptureAndAsk({
+    compactMode,
+    setActiveTab,
+    onError: setCaptureError,
+  });
   useCompactWindowSize(compactMode, compactHeight);
 
   useEffect(() => {

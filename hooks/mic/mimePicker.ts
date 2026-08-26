@@ -7,13 +7,13 @@
  *  is less reliable on AAC frames and the latency hit on Safari isn't
  *  worth it for the Ask AI mic. */
 
-export const PREFERRED_MIME_TYPES = [
+const PREFERRED_MIME_TYPES = [
   "audio/webm;codecs=opus",
   "audio/webm",
   "audio/ogg;codecs=opus",
 ] as const;
 
-export function pickMimeType(): string | undefined {
+function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
   for (const t of PREFERRED_MIME_TYPES) {
     if (MediaRecorder.isTypeSupported(t)) return t;

@@ -72,6 +72,26 @@ function PostHogIdentifyOnSession() {
   return null;
 }
 
+/**
+ * Tag every captured event/exception with the packaged app version so
+ * error triage can distinguish releases. Global error + unhandledrejection
+ * capture is already enabled via `capture_exceptions` in posthog.init.
+ */
+function PostHogAppVersionTagger() {
+  useEffect(() => {
+    if (!initialized || typeof window === "undefined") return;
+    window.electronAPI
+      ?.updaterGetVersion?.()
+      .then((version) => {
+        if (version) posthog.register({ app_version: version });
+      })
+      .catch(() => {
+        /* browser / older preload without updater IPC */
+      });
+  }, []);
+  return null;
+}
+
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     initPostHog();
@@ -83,6 +103,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
         <PostHogPageviewTracker />
       </Suspense>
       <PostHogIdentifyOnSession />
+      <PostHogAppVersionTagger />
       {children}
     </>
   );

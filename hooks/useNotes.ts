@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { BACKEND_API_URL } from "@/lib/constant";
+import { humanizeError } from "@/lib/api-errors";
 import { ricFetch } from "@/lib/ric-fetch";
 import type { SavedNote, NotesResponse, PaginationInfo } from "@/lib/types";
 
@@ -56,13 +56,9 @@ export function useNotes({ initialLimit = 10 }: UseNotesOptions = {}) {
       if (t) params.set("tag", t);
 
       try {
-        const res = await fetch(
-          `${BACKEND_API_URL}/api/notes?${params.toString()}`,
-          {
-            credentials: "include",
-            signal: abortRef.current.signal,
-          },
-        );
+        const res = await ricFetch(`/api/notes?${params.toString()}`, {
+          signal: abortRef.current.signal,
+        });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -71,8 +67,7 @@ export function useNotes({ initialLimit = 10 }: UseNotesOptions = {}) {
         setPagination(data.pagination);
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "AbortError") return;
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
+        setError(humanizeError(err));
       } finally {
         setIsLoading(false);
       }
@@ -94,8 +89,7 @@ export function useNotes({ initialLimit = 10 }: UseNotesOptions = {}) {
         setPagination((p) => ({ ...p, total: p.total + 1 }));
         return data.note;
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
+        setError(humanizeError(err));
         return null;
       }
     },
@@ -112,8 +106,7 @@ export function useNotes({ initialLimit = 10 }: UseNotesOptions = {}) {
       setNotes((prev) => prev.filter((n) => n.id !== noteId));
       setPagination((p) => ({ ...p, total: Math.max(0, p.total - 1) }));
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      setError(humanizeError(err));
     }
   }, []);
 

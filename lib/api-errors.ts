@@ -11,7 +11,7 @@
 
 const DEFAULT_MESSAGE = "Something went wrong. Please try again.";
 
-export function humanizeQuotaExceeded(resetAt?: string | null): string {
+function humanizeQuotaExceeded(resetAt?: string | null): string {
   if (resetAt) {
     try {
       const date = new Date(resetAt);
@@ -139,8 +139,8 @@ export function humanizeError(err: unknown): string {
     if (/quota[_\s-]?exceeded/i.test(msg)) {
       return humanizeQuotaExceeded();
     }
-    // "HTTP error! status: 404" → extract status, humanize.
-    const match = msg.match(/status:\s*(\d{3})/i);
+    // "HTTP error! status: 404" or "HTTP 404" → extract status, humanize.
+    const match = msg.match(/(?:status:\s*|^HTTP\s+)(\d{3})/i);
     if (match) {
       const status = Number.parseInt(match[1], 10);
       if (Number.isFinite(status)) return humanizeHttpStatus(status);

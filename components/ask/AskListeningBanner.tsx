@@ -65,8 +65,7 @@ export function AskListeningBanner({
       )}
       <span
         className={cn(
-          "ml-auto max-w-[40%] truncate text-destructive/80",
-          density === "compact" ? "text-[9px]" : "text-[10px]",
+          "ml-auto max-w-[40%] truncate text-destructive/80 text-[10px]",
         )}
       >
         {askMic.transcript || "say something…"}

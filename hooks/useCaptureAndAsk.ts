@@ -16,11 +16,14 @@ import type { useTab } from "@/components/TabContext";
 interface UseCaptureAndAskArgs {
   compactMode: boolean;
   setActiveTab: ReturnType<typeof useTab>["setActiveTab"];
+  /** Called when the hotkey-triggered capture fails so the UI can surface it. */
+  onError?: (message: string) => void;
 }
 
 export function useCaptureAndAsk({
   compactMode,
   setActiveTab,
+  onError,
 }: UseCaptureAndAskArgs) {
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -34,11 +37,17 @@ export function useCaptureAndAsk({
         const result = await api.screen.capture();
         if (!result.success) {
           console.error("Screen capture failed:", result.error);
+          onError?.(
+            "Screenshot capture failed. Check Screen Recording permission in System Settings, then try again.",
+          );
           return;
         }
         if (!isVisionScreenshotDataUrl(result.dataUrl)) {
           console.error(
             "[CaptureAndAsk] Unexpected image payload (worker would reject)",
+          );
+          onError?.(
+            "Screenshot could not be attached (invalid image data). Try again.",
           );
           return;
         }
@@ -62,6 +71,7 @@ export function useCaptureAndAsk({
         }, 0);
       } catch (err) {
         console.error("Failed to handle screen capture hotkey:", err);
+        onError?.("Screenshot capture failed. Please try again.");
       }
     });
 
@@ -72,5 +82,5 @@ export function useCaptureAndAsk({
         attachTimer = null;
       }
     };
-  }, [compactMode, setActiveTab]);
+  }, [compactMode, setActiveTab, onError]);
 }

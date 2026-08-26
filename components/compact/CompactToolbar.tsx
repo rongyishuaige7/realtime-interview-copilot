@@ -289,7 +289,7 @@ export function CompactToolbar({
             className="hidden xl:inline-flex ml-0.5 text-emerald-300/90"
           />
           {attachedImages.length > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-bold text-accent-foreground">
+            <span className="absolute -right-1 -top-1 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-accent px-0.5 text-[10px] font-bold text-accent-foreground">
               {attachedImages.length}
             </span>
           )}
@@ -331,7 +331,7 @@ export function CompactToolbar({
       </Button>
 
       {hasContextAttached && (
-        <span className="hidden rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[9px] text-info md:inline">
+        <span className="hidden rounded-full border border-info/20 bg-info/10 px-2 py-0.5 text-[10px] text-info md:inline">
           Context attached
         </span>
       )}

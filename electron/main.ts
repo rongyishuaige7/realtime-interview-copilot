@@ -25,6 +25,13 @@ import {
 } from "./security/permissions";
 import { isTrustedOrigin } from "./security/origin";
 import { initAutoUpdater } from "./updater";
+import {
+  loadRestoredBounds,
+  loadWindowState,
+  readStateValue,
+  trackWindowState,
+  writeStateValue,
+} from "./windowState";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -87,15 +94,23 @@ async function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   const iconPath = resolveIconPath();
 
+  // Restore last session's window position (and size when the renderer
+  // doesn't override it) and overlay pin preference. Falls back to the
+  // historical top-center default on first run.
+  const restored = loadRestoredBounds();
+  const savedAlwaysOnTop = loadWindowState().alwaysOnTop;
+  const defaultWidth = 1000;
+  const defaultHeight = 600;
+
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 600,
-    x: Math.floor((width - 1000) / 2),
-    y: 0,
+    width: restored?.width ?? defaultWidth,
+    height: restored?.height ?? defaultHeight,
+    x: restored?.x ?? Math.floor((width - defaultWidth) / 2),
+    y: restored?.y ?? 0,
     frame: false,
     resizable: true,
     transparent: true,
-    alwaysOnTop: true,
+    alwaysOnTop: savedAlwaysOnTop !== false,
     backgroundColor: "#00000000",
     hasShadow: true,
     icon: iconPath,
@@ -111,6 +126,7 @@ async function createWindow() {
     show: false,
   });
 
+  trackWindowState(mainWindow);
   attachWindowFocusNotifier(mainWindow);
 
   const isPackaged = app.isPackaged && !process.env.DEV_PORT;
@@ -171,9 +187,10 @@ async function createWindow() {
   const debugMode =
     isDev || process.env.ELECTRON_DEBUG === "true" || debugMarker;
 
+  const devPort = process.env.DEV_PORT || "3000";
+  const indexFile = path.join(buildPath, "index.html");
   try {
     if (isDev) {
-      const devPort = process.env.DEV_PORT || "3000";
       const devUrl = `http://localhost:${devPort}`;
       await mainWindow.loadURL(devUrl);
 
@@ -181,7 +198,6 @@ async function createWindow() {
         mainWindow?.webContents.reloadIgnoringCache();
       }, 200);
     } else {
-      const indexFile = path.join(buildPath, "index.html");
       await mainWindow.loadFile(indexFile);
 
       setTimeout(() => {
@@ -198,9 +214,14 @@ async function createWindow() {
       error instanceof Error ? error.message : String(error),
     );
     // Render via data URL with an explicit charset; content is fully escaped.
+    // The retry button reloads the real target (dev URL / index.html) so a
+    // transient failure (e.g. `next dev` not up yet) is recoverable in-app.
+    const retryTarget = isDev
+      ? `http://localhost:${devPort}`
+      : `file://${indexFile}`;
     mainWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(
-        `<!doctype html><html><body><h1>Error loading application</h1><p>${safeMsg}</p></body></html>`,
+        `<!doctype html><html><body style="font-family:system-ui;background:#141210;color:#edeceb;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center;max-width:32rem;padding:2rem"><h1 style="font-size:1.1rem;margin:0 0 .5rem">Error loading application</h1><p style="opacity:.7;font-size:.85rem;margin:0 0 1.25rem">${safeMsg}</p><button onclick="location.href='${retryTarget}'" style="background:#34d399;color:#0a0a0a;border:none;padding:.55rem 1.1rem;border-radius:.5rem;font-weight:600;font-size:.85rem;cursor:pointer">Retry</button></div></body></html>`,
       )}`,
     );
   }
@@ -260,13 +281,21 @@ app.whenReady().then(async () => {
         /* user denied — renderer will surface the error on first use */
       }
     } else if (micStatus === "denied" || micStatus === "restricted") {
-      shell
-        .openExternal(
-          "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-        )
-        .catch(() => {
-          /* best-effort deep link */
-        });
+      // Nudge the user toward System Settings only ONCE per install.
+      // Force-opening the privacy pane on every launch felt hijacky and
+      // gave no way to opt out; the in-app mic UI still surfaces a clear
+      // error on first use afterwards.
+      const nudgeAt = readStateValue<string>("micSettingsNudgeAt");
+      if (!nudgeAt) {
+        writeStateValue("micSettingsNudgeAt", new Date().toISOString());
+        shell
+          .openExternal(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+          )
+          .catch(() => {
+            /* best-effort deep link */
+          });
+      }
     }
   }
 

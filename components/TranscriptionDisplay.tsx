@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import { TranscriptionSegment } from "@/lib/types";
 import { TranscriptionLine } from "@/components/TranscriptionLine";
 import { cn } from "@/lib/utils";
@@ -10,18 +10,31 @@ interface TranscriptionDisplayProps {
   className?: string;
 }
 
+/**
+ * Only the most recent MAX_RENDERED segments are rendered. Older history
+ * stays in state (for prompts/export/persistence) but is dropped from the
+ * DOM so multi-hour sessions don't accumulate thousands of live nodes.
+ * The cap is generous — far more than a user scrolls back through.
+ */
+const MAX_RENDERED = 300;
+
+const MemoizedTranscriptionLine = memo(TranscriptionLine);
+
 export function TranscriptionDisplay({
   segments,
   className,
 }: TranscriptionDisplayProps) {
-  if (segments.length === 0) {
+  const rendered =
+    segments.length > MAX_RENDERED ? segments.slice(-MAX_RENDERED) : segments;
+
+  if (rendered.length === 0) {
     return null;
   }
 
   return (
     <div className={cn("w-full space-y-2", className)}>
-      {segments.map((segment) => (
-        <TranscriptionLine
+      {rendered.map((segment) => (
+        <MemoizedTranscriptionLine
           key={segment.id}
           segment={segment}
           isFinal={segment.isFinal}

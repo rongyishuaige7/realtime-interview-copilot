@@ -159,5 +159,3 @@ export function Kbd({
     </span>
   );
 }
-
-export default Kbd;

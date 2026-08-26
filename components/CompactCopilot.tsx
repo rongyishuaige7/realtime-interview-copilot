@@ -407,7 +407,13 @@ export function CompactCopilot({
     chatReset();
     setOutputMode("transcript");
     setSessionFlag(FLAGS.COPILOT);
-  }, [chatReset, clearTranscription, setCompletion, setOutputMode, setSessionFlag]);
+  }, [
+    chatReset,
+    clearTranscription,
+    setCompletion,
+    setOutputMode,
+    setSessionFlag,
+  ]);
 
   // hasOutput drives both the visibility of the output panel and the
   // parent's "needs expanded window" signal. We treat ANY pending state
@@ -528,5 +534,3 @@ export function CompactCopilot({
     </div>
   );
 }
-
-export default CompactCopilot;

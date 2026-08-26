@@ -29,6 +29,8 @@ export default function TitleBar() {
   const [isElectron, setIsElectron] = useState(false);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [updateStateType, setUpdateStateType] = useState<string | null>(null);
+  const [updateToast, setUpdateToast] = useState<string | null>(null);
   const { backdropOpacity, adjustBackdropOpacity } = useAppBackdrop();
   const { data: session } = authClient.useSession();
   const { activeTab, setActiveTab, compactMode, setCompactMode } = useTab();
@@ -45,6 +47,7 @@ export default function TitleBar() {
       }
       if (window.electronAPI.onUpdaterStatus) {
         const unsubscribe = window.electronAPI.onUpdaterStatus((status) => {
+          setUpdateStateType(status.type);
           switch (status.type) {
             case "checking":
               setUpdateStatus("Checking for updates…");
@@ -61,12 +64,20 @@ export default function TitleBar() {
               setUpdateStatus(
                 `Update ${status.version} ready — restart to install`,
               );
+              // Non-modal toast so the user can act even after dismissing
+              // the native dialog.
+              setUpdateToast(
+                `Update ${status.version} is ready — restart to install.`,
+              );
               break;
             case "not-available":
               setUpdateStatus(`Up to date (${status.version})`);
               break;
             case "error":
               setUpdateStatus("Update check failed");
+              setUpdateToast(
+                "Update check failed. You can retry from the download icon.",
+              );
               break;
             default:
               setUpdateStatus(null);
@@ -223,7 +234,7 @@ export default function TitleBar() {
           <Button
             size="icon"
             variant="ghost"
-            className="h-6 w-6"
+            className="relative h-6 w-6"
             onClick={() => void handleCheckForUpdates()}
             title={
               updateStatus ??
@@ -233,6 +244,17 @@ export default function TitleBar() {
             }
           >
             <Download className="h-3 w-3" />
+            {(updateStateType === "available" ||
+              updateStateType === "downloading" ||
+              updateStateType === "downloaded") && (
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute right-1 top-1 h-1.5 w-1.5 rounded-full",
+                  updateStateType === "downloaded" ? "bg-accent" : "bg-info",
+                )}
+              />
+            )}
           </Button>
 
           <Button
@@ -282,6 +304,38 @@ export default function TitleBar() {
           </div>
         </div>
       </div>
+
+      {updateToast && (
+        <div
+          data-clickable
+          className="fixed bottom-14 right-4 z-[95] flex max-w-xs items-center gap-2 rounded-lg border border-border-subtle bg-surface-raised px-3 py-2 shadow-lg animate-fade-in-scale"
+          role="status"
+        >
+          <span className="text-[11px] leading-snug text-text-secondary">
+            {updateToast}
+          </span>
+          {updateStateType === "downloaded" && (
+            <button
+              type="button"
+              className="shrink-0 rounded-md bg-accent px-2 py-1 text-[10px] font-semibold text-accent-foreground hover:opacity-90"
+              onClick={() => {
+                setUpdateToast(null);
+                void window.electronAPI?.appRelaunch();
+              }}
+            >
+              Restart
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label="Dismiss update notification"
+            className="shrink-0 rounded p-0.5 text-text-tertiary hover:text-text-primary"
+            onClick={() => setUpdateToast(null)}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
