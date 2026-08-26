@@ -239,6 +239,15 @@ export async function handleCompletion(
     trackedUser?.id ?? null,
   );
 
+  // Live interview features need the first token FAST — a thinking phase
+  // makes the interviewer wait with no visible output. Force no-thinking
+  // for Ask AI and Copilot regardless of global/per-user budget;
+  // Summarizer keeps the admin-configured behavior.
+  const effectiveParams =
+    payload.flag === FLAGS.ASK_AI || payload.flag === FLAGS.COPILOT
+      ? { ...modelParams, thinkingBudget: "off" as const }
+      : modelParams;
+
   const completionFn = cfg.useCustom
     ? streamOpenAICompatibleCompletion(
         wireMessages,
@@ -246,7 +255,7 @@ export async function handleCompletion(
         cfg.customApiKey,
         cfg.customBaseUrl,
         trackingWriter,
-        modelParams,
+        effectiveParams,
       )
     : streamGeminiCompletion(
         wireMessages,
@@ -255,7 +264,7 @@ export async function handleCompletion(
         cfg.cfAccountId,
         cfg.cfGatewayId,
         trackingWriter,
-        modelParams,
+        effectiveParams,
         trackedUser,
       );
 

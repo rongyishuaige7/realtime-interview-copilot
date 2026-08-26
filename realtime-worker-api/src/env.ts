@@ -1,11 +1,7 @@
 /**
  * Shared `Env` shape for every worker route + plugin.
- *
- * `extends PostHogEnv` is a pre-existing stale reference — the type is not
- * defined anywhere in the repo. Tracked as a known design flaw; preserved
- * verbatim here so the behavior-preserving split does not change types.
  */
-export interface Env extends PostHogEnv {
+export interface Env {
   DEEPGRAM_API_KEY: string;
   GOOGLE_GENERATIVE_AI_API_KEY: string;
   GEMINI_MODEL?: string;

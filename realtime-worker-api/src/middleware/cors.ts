@@ -13,7 +13,7 @@ export const TRUSTED_ORIGINS: ReadonlySet<string> = new Set<string>(
   AUTH_TRUSTED_ORIGINS,
 );
 
-export function buildCorsHeaders(request: Request) {
+function buildCorsHeaders(request: Request) {
   const origin = request.headers.get("Origin");
   const allowOrigin =
     origin && TRUSTED_ORIGINS.has(origin)

@@ -11,8 +11,9 @@
  */
 
 export const KV = {
-  /** Hot-path cache of resolved admin_config (admin dashboard settings). */
-  adminConfig: () => "admin_config:v1",
+  /** Hot-path cache of resolved admin_config (admin dashboard settings).
+   *  v2: added `provider` field — bump so old v1 blobs never parse as v2. */
+  adminConfig: () => "admin_config:v2",
 
   /** 5-minute throttle for lastActiveAt updates per user. */
   userActivity: (userId: string) => `activity:${userId}`,

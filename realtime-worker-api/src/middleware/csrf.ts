@@ -10,7 +10,7 @@
 import { TRUSTED_ORIGINS } from "./cors";
 
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-export const RIC_CLIENT_HEADER = "RIC-Desktop";
+const RIC_CLIENT_HEADER = "RIC-Desktop";
 
 export type CsrfFailureReason = "forbidden_origin" | "missing_client_header";
 
@@ -32,9 +32,4 @@ export function csrfCheck(request: Request): CsrfFailureReason | null {
   }
 
   return null;
-}
-
-/** @deprecated use csrfCheck — kept for tests */
-export function originIsTrusted(request: Request): boolean {
-  return csrfCheck(request) === null;
 }

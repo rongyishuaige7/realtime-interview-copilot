@@ -6,7 +6,6 @@ export const DISPOSABLE_DOMAINS = new Set(adminCfg.sentinel.disposableDomains);
 export const RATE_LIMIT_WINDOW_MS = adminCfg.sentinel.rateLimits.windowMs;
 export const ALLOWED_CONFIG_KEYS = adminCfg.allowedConfigKeys as readonly string[];
 
-export const SAFE_ID_RE = /^[a-zA-Z0-9_-]{1,128}$/;
 export const MAX_QUERY_LEN = 120;
 export const MAX_LIMIT = 100;
 export const DEFAULT_LIMIT = 50;

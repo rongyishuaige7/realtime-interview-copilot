@@ -10,6 +10,7 @@ import {
   user,
 } from "../../../db/schema";
 import adminCfg from "../../../config.json";
+import { DEFAULT_GEMINI_MODEL, isCustomActive, resolveProvider } from "../../../config-cache";
 import type { AdminDeps } from "../types";
 
 export function dashboardEndpoints(deps: AdminDeps) {
@@ -75,11 +76,12 @@ export function dashboardEndpoints(deps: AdminDeps) {
         const customModelName = cfgMap.get("custom_model_name") || "";
         const customBaseUrl = cfgMap.get("custom_base_url") || "";
         const customApiKey = cfgMap.get("custom_api_key") || "";
-        const useCustomModel = Boolean(customModelName && customBaseUrl && customApiKey);
+        const useCustomModel = isCustomActive(cfgMap);
 
         const runtime = {
           ...envRuntime,
-          geminiModel: cfgMap.get("gemini_model") || envRuntime.geminiModel || "gemini-flash-lite-latest",
+          provider: resolveProvider(cfgMap),
+          geminiModel: cfgMap.get("gemini_model") || envRuntime.geminiModel || DEFAULT_GEMINI_MODEL,
           geminiKeyConfigured: Boolean(cfgMap.get("gemini_key") || envRuntime.geminiKeyConfigured),
           deepgramKeyConfigured: Boolean(cfgMap.get("deepgram_key") || envRuntime.deepgramKeyConfigured),
           geminiKeySource: cfgMap.has("gemini_key") ? "dashboard" : envRuntime.geminiKeyConfigured ? "env" : "none",
@@ -115,30 +117,45 @@ export function dashboardEndpoints(deps: AdminDeps) {
         const weeks = 8;
         const now = new Date();
         const weekMs = 7 * 86_400_000;
-        const startTs = new Date(now.getTime() - weeks * weekMs);
-        startTs.setHours(0, 0, 0, 0);
+        // Week boundaries are computed in UTC so buckets align exactly
+        // with the `weekStart` labels rendered by the dashboard.
+        const startTs = new Date(
+          Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate(),
+          ),
+        );
+        startTs.setUTCDate(startTs.getUTCDate() - weeks * 7);
         const startEpoch = Math.floor(startTs.getTime() / 1000);
         const weekSecs = 7 * 24 * 60 * 60;
 
+        // Bucket in JS rather than SQL integer division — same result,
+        // but immune to driver/type quirks and trivially testable.
         const rawResult = await opts.d1
-          .prepare(
-            `SELECT ((createdAt - ?1) / ?2) AS bucket, COUNT(*) AS c FROM user WHERE createdAt >= ?1 GROUP BY bucket ORDER BY bucket`,
-          )
-          .bind(startEpoch, weekSecs)
-          .all<{ bucket: number; c: number }>();
+          .prepare(`SELECT createdAt FROM user WHERE createdAt >= ?1`)
+          .bind(startEpoch)
+          .all<{ createdAt: number }>();
 
-        const bucketMap = new Map<number, number>();
-        for (const row of rawResult.results) bucketMap.set(row.bucket, row.c);
+        const counts = new Array<number>(weeks).fill(0);
+        for (const row of rawResult.results) {
+          const bucket = Math.floor((row.createdAt - startEpoch) / weekSecs);
+          if (bucket >= 0 && bucket < weeks) {
+            counts[bucket] += 1;
+          }
+        }
 
         const points: { weekStart: string; count: number }[] = [];
         for (let i = 0; i < weeks; i++) {
           const ws = new Date(startTs.getTime() + i * weekMs);
           points.push({
             weekStart: ws.toISOString().split("T")[0],
-            count: bucketMap.get(i) ?? 0,
+            count: counts[i],
           });
         }
-        return ctx.json({ chart: points });
+        return ctx.json({ chart: points }, {
+          headers: { "Cache-Control": "no-store" },
+        });
       },
     ),
 

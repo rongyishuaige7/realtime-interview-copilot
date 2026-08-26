@@ -6,6 +6,7 @@ import { adminConfig } from "../../../db/schema";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import type * as schemaTypes from "../../../db/schema";
 import { ADMIN_FETCH_TIMEOUT_MS } from "../constants";
+import { DEFAULT_GEMINI_MODEL, isCustomActive, resolveProvider } from "../../../config-cache";
 import type { CfGatewayConfig } from "../types";
 
 type DbHandle = DrizzleD1Database<typeof schemaTypes>;
@@ -40,12 +41,13 @@ export function createAiGateway(
     const customModelName = map.get("custom_model_name") || "";
     const customBaseUrl = map.get("custom_base_url") || "";
     const customApiKey = map.get("custom_api_key") || "";
-    const useCustom = Boolean(customModelName && customBaseUrl && customApiKey);
+    const useCustom = isCustomActive(map);
+    const provider = resolveProvider(map);
     return {
       geminiModel:
         map.get("gemini_model") ||
         String(runtime.geminiModel ?? "") ||
-        "gemini-2.5-flash-lite",
+        DEFAULT_GEMINI_MODEL,
       geminiKey: map.get("gemini_key") || String(runtime.geminiKey ?? ""),
       geminiKeySource: map.has("gemini_key")
         ? "dashboard"
@@ -63,6 +65,7 @@ export function createAiGateway(
       customBaseUrl,
       customApiKey,
       useCustom,
+      provider,
     };
   }
 

@@ -2,9 +2,9 @@
 
 import { z } from "zod";
 
-export const MAX_RESUME_TEXT_CHARS = 6000;
-export const MAX_JD_TEXT_CHARS = 4000;
-export const MAX_INTERVIEW_NOTES_CHARS = 4000;
+const MAX_RESUME_TEXT_CHARS = 6000;
+const MAX_JD_TEXT_CHARS = 4000;
+const MAX_INTERVIEW_NOTES_CHARS = 4000;
 
 export const interviewContextPatchSchema = z.object({
   interviewNotes: z.string().max(MAX_INTERVIEW_NOTES_CHARS).nullable().optional(),
@@ -14,7 +14,3 @@ export const interviewContextPatchSchema = z.object({
 });
 
 export type InterviewContextPatch = z.infer<typeof interviewContextPatchSchema>;
-
-export const adminUserInterviewContextQuerySchema = z.object({
-  userId: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/),
-});

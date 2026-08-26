@@ -9,14 +9,15 @@
     "test": "node --import tsx --test src/**/*.test.ts"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260617.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "@types/node": "^26.2.0",
     "drizzle-kit": "^0.31.10",
-    "tsx": "^4.20.3",
+    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "wrangler": "^4.102.0"
+    "wrangler": "^4.125.0"
   },
   "dependencies": {
-    "better-auth": "^1.6.19",
+    "better-auth": "^1.7.1",
     "drizzle-orm": "^0.45.2",
     "zod": "^4.4.3"
   }

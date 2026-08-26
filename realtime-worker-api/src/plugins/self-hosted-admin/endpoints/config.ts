@@ -2,8 +2,10 @@
 
 import { eq } from "drizzle-orm";
 import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import { z } from "zod";
 import { adminConfig } from "../../../db/schema";
 import adminCfg from "../../../config.json";
+import { resolveProvider } from "../../../config-cache";
 import { validateOutboundUrl } from "../../../url-guard";
 import { ADMIN_FETCH_TIMEOUT_MS, THINKING_BUDGETS } from "../constants";
 import { isDisplayMaskedSecret, isSecretConfigKey, maskSecret } from "../helpers";
@@ -304,11 +306,59 @@ export function configEndpoints(deps: AdminDeps) {
           apiKey: apiKeyRaw ? maskSecret(apiKeyRaw) : "",
           hasApiKey: Boolean(apiKeyRaw),
           enabled: Boolean(model && baseUrl && apiKeyRaw),
+          activeProvider: resolveProvider(map),
           defaults: {
             baseUrl: OPENAI_DEFAULT_BASE_URL,
             model: OPENAI_DEFAULT_MODEL,
           },
         });
+      },
+    ),
+
+    /**
+     * Switch the active AI provider ("gemini" | "openai"). Switching to
+     * "openai" is rejected unless all three custom_* rows are saved, so a
+     * half-configured provider can never serve (or silently fail)
+     * completions. Invalidates the config cache on success.
+     */
+    adminSetProvider: createAuthEndpoint(
+      "/self-hosted-admin/provider",
+      {
+        method: "POST",
+        use: [sessionMiddleware],
+        body: z.object({ provider: z.enum(["gemini", "openai"]) }),
+      },
+      async (ctx) => {
+        if (!(await isAdmin(ctx.context.session.user.email)))
+          throw new APIError("FORBIDDEN");
+        const db = opts.getDb();
+        const { provider } = ctx.body;
+
+        if (provider === "openai") {
+          const rows = await db.select().from(adminConfig);
+          const map = new Map(rows.map((r) => [r.key, r.value]));
+          const missing: string[] = [];
+          for (const key of Object.values(OPENAI_CONFIG_KEYS)) {
+            if (!map.get(key)) missing.push(key.replace(/^custom_/, ""));
+          }
+          if (missing.length > 0) {
+            return ctx.json({
+              ok: false,
+              error: `Save the OpenAI-compatible settings first — missing: ${missing.join(", ")}`,
+            });
+          }
+        }
+
+        const now = new Date();
+        await db
+          .insert(adminConfig)
+          .values({ key: "active_provider", value: provider, updatedAt: now })
+          .onConflictDoUpdate({
+            target: adminConfig.key,
+            set: { value: provider, updatedAt: now },
+          });
+        await opts.onConfigChange?.();
+        return ctx.json({ ok: true, provider });
       },
     ),
 

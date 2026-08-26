@@ -12,7 +12,7 @@ export enum FLAGS {
  *  payload size, model token cost and screen-shot fan-out bounded — also
  *  matches the renderer-side MAX_IMAGES so any extra screenshots a client
  *  somehow sends are silently dropped here. */
-export const MAX_IMAGES_PER_REQUEST = 4;
+const MAX_IMAGES_PER_REQUEST = 4;
 
 /** Hard cap on the number of messages we accept in a single chat request.
  *  24 = ~12 user + 12 assistant turns. Anything older the client must drop
@@ -63,7 +63,7 @@ export interface WireMessage {
   images: InlineImage[];
 }
 
-export function parseImageDataUrl(input: string | undefined): InlineImage | null {
+function parseImageDataUrl(input: string | undefined): InlineImage | null {
   if (!input) return null;
   const match = /^data:([^;]+);base64,(.+)$/.exec(input.trim());
   if (!match) return null;

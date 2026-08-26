@@ -16,6 +16,11 @@ import { adminConfig, userModelParams } from "./db/schema";
 import { KV, KV_TTL_SECONDS } from "./kv-keys";
 import adminCfg from "./config.json";
 
+/** Single source of truth for the fallback model when neither the
+ *  dashboard nor env specifies one. gemini-2.5-flash-lite retires
+ *  Oct 2026 — keep this pinned to a supported model. */
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
+
 export type ThinkingBudget = "off" | "low" | "medium" | "high";
 
 export interface ModelParams {
@@ -45,7 +50,7 @@ function parseFloatInRange(v: string | undefined, min: number, max: number, dflt
   return Math.min(max, Math.max(min, n));
 }
 
-export function globalModelParamsFromMap(map: Map<string, string>): ModelParams {
+function globalModelParamsFromMap(map: Map<string, string>): ModelParams {
   const d = adminCfg.modelParams.defaults;
   const r = adminCfg.modelParams.ranges;
   return {
@@ -64,6 +69,9 @@ const NonSecretConfigSchema = z.object({
   customModelName: z.string(),
   customBaseUrl: z.string(),
   useCustom: z.boolean(),
+  // Optional + defaulted so v2 blobs written before this field existed
+  // (or partially rolled-out deploys) still parse.
+  provider: z.enum(["gemini", "openai"]).optional().default("gemini"),
   cfAccountId: z.string(),
   cfGatewayId: z.string(),
   modelMaxOutputTokens: z.number().int(),
@@ -81,6 +89,7 @@ export interface ResolvedConfig {
   customBaseUrl: string;
   customApiKey: string;
   useCustom: boolean;
+  provider: Provider;
   cfAccountId: string;
   cfGatewayId: string;
   cfApiToken: string;
@@ -104,6 +113,28 @@ export interface ConfigCacheEnv {
 const DEFAULT_CF_ACCOUNT_ID = "b4ca0337fb21e846c53e1f2611ba436c";
 const DEFAULT_CF_GATEWAY_ID = "gateway04";
 
+export type Provider = "gemini" | "openai";
+
+/**
+ * Resolve the active AI provider from an admin_config key/value map.
+ * Defaults to "gemini" — the OpenAI-compatible path only runs when an
+ * admin has explicitly switched to it AND all three custom_* credentials
+ * are present (see `isCustomActive`). Pure function; unit-testable.
+ */
+export function resolveProvider(map: Map<string, string>): Provider {
+  return map.get("active_provider") === "openai" ? "openai" : "gemini";
+}
+
+/** Whether the OpenAI-compatible path should actually serve completions. */
+export function isCustomActive(map: Map<string, string>): boolean {
+  if (resolveProvider(map) !== "openai") return false;
+  return Boolean(
+    map.get("custom_model_name") &&
+      map.get("custom_base_url") &&
+      map.get("custom_api_key"),
+  );
+}
+
 async function loadFromD1(env: ConfigCacheEnv): Promise<ResolvedConfig> {
   try {
     const db = getDb(env);
@@ -113,17 +144,18 @@ async function loadFromD1(env: ConfigCacheEnv): Promise<ResolvedConfig> {
     const customModelName = map.get("custom_model_name") || "";
     const customBaseUrl = map.get("custom_base_url") || "";
     const customApiKey = map.get("custom_api_key") || "";
-    const useCustom = Boolean(customModelName && customBaseUrl && customApiKey);
+    const useCustom = isCustomActive(map);
     const mp = globalModelParamsFromMap(map);
 
     return {
-      geminiModel: map.get("gemini_model") || env.GEMINI_MODEL || "gemini-2.5-flash-lite",
+      geminiModel: map.get("gemini_model") || env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
       geminiKey: map.get("gemini_key") || env.GOOGLE_GENERATIVE_AI_API_KEY || "",
       deepgramKey: map.get("deepgram_key") || env.DEEPGRAM_API_KEY || "",
       customModelName,
       customBaseUrl,
       customApiKey,
       useCustom,
+      provider: resolveProvider(map),
       cfAccountId: map.get("cf_account_id") || env.CF_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID,
       cfGatewayId: map.get("cf_gateway_id") || env.CF_GATEWAY_ID || DEFAULT_CF_GATEWAY_ID,
       cfApiToken: map.get("cf_api_token") || env.CF_API_TOKEN || "",
@@ -136,13 +168,14 @@ async function loadFromD1(env: ConfigCacheEnv): Promise<ResolvedConfig> {
     console.error("[config-cache] D1 load failed, falling back to env:", err);
     const d = adminCfg.modelParams.defaults;
     return {
-      geminiModel: env.GEMINI_MODEL || "gemini-2.5-flash-lite",
+      geminiModel: env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
       geminiKey: env.GOOGLE_GENERATIVE_AI_API_KEY || "",
       deepgramKey: env.DEEPGRAM_API_KEY || "",
       customModelName: "",
       customBaseUrl: "",
       customApiKey: "",
       useCustom: false,
+      provider: "gemini",
       cfAccountId: env.CF_ACCOUNT_ID || DEFAULT_CF_ACCOUNT_ID,
       cfGatewayId: env.CF_GATEWAY_ID || DEFAULT_CF_GATEWAY_ID,
       cfApiToken: env.CF_API_TOKEN || "",
@@ -187,6 +220,7 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
       customModelName: cachedNonSecret.customModelName,
       customBaseUrl: cachedNonSecret.customBaseUrl,
       useCustom: cachedNonSecret.useCustom,
+      provider: cachedNonSecret.provider,
       cfAccountId: cachedNonSecret.cfAccountId,
       cfGatewayId: cachedNonSecret.cfGatewayId,
       modelMaxOutputTokens: cachedNonSecret.modelMaxOutputTokens,
@@ -202,6 +236,7 @@ export async function getCachedConfig(env: ConfigCacheEnv): Promise<ResolvedConf
     customModelName: fresh.customModelName,
     customBaseUrl: fresh.customBaseUrl,
     useCustom: fresh.useCustom,
+    provider: fresh.provider,
     cfAccountId: fresh.cfAccountId,
     cfGatewayId: fresh.cfGatewayId,
     modelMaxOutputTokens: fresh.modelMaxOutputTokens,

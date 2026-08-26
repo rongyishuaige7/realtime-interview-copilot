@@ -17,7 +17,7 @@ const paginationQuerySchema = z.object({
 
 export const usageWindowQuerySchema = z.enum(["1h", "24h", "7d", "30d", "90d"]).optional();
 
-export const summaryWindowQuerySchema = z.enum(["1h", "24h", "7d", "30d"]).optional();
+const summaryWindowQuerySchema = z.enum(["1h", "24h", "7d", "30d"]).optional();
 
 export const requiredUserIdQuerySchema = z.object({
   userId: safeIdSchema,

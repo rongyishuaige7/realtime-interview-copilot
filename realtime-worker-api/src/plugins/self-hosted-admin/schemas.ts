@@ -98,7 +98,7 @@ export const userModelParamsBodySchema = z.object({
 
 export const userModelParamsDeleteSchema = z.object({ userId: safeIdSchema });
 
-export const QUOTA_PLAN_TIERS = [
+const QUOTA_PLAN_TIERS = [
   "legacy_unlimited",
   "free_tier",
   "early_access",

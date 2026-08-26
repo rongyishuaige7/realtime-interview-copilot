@@ -91,6 +91,7 @@ export interface AdminDeps {
     customBaseUrl: string;
     customApiKey: string;
     useCustom: boolean;
+    provider: "gemini" | "openai";
   }>;
   fetchAiGateway: (
     cfg: CfGatewayConfig,
