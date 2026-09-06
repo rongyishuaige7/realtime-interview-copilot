@@ -88,6 +88,13 @@ bun install
 bun run electron:dev
 ```
 
+Before submitting changes, run the project checks:
+
+```bash
+bun run lint
+bun run build
+```
+
 Build installers with:
 
 ```bash
