@@ -88,6 +88,8 @@ bun install
 bun run electron:dev
 ```
 
+For backend environment variables, database setup, and local Worker development, see the [Realtime Worker API documentation](./realtime-worker-api/README.md).
+
 Before submitting changes, run the project checks:
 
 ```bash
