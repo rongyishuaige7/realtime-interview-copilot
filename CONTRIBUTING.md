@@ -10,6 +10,22 @@ Thank you for your interest in contributing to Realtime Interview Copilot! We we
 - Push your changes to your fork: `git push origin your-branch-name`.
 - Submit a pull request.
 
+## Local Development
+
+Install dependencies and start the Electron app:
+
+```bash
+bun install
+bun run electron:dev
+```
+
+Before opening a pull request, run:
+
+```bash
+bun run lint
+bun run build
+```
+
 ## Contribution Guidelines
 
 - Code style: Please follow the existing code style and formatting.
